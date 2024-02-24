@@ -1,60 +1,68 @@
 import subprocess
 import tkinter as tk
-from tkinter import scrolledtext
+from tkinter import Label, Button
 import threading
 import re
 
-# Add comma seprated IP's to be pinged in this array 
-data = ['8.8.8.8']
+# Add IP addresses and hostnames to be pinged along with their labels
+data = [
+   {'ip': '8.8.8.8', 'hostname': 'Google'}
+]
 
-def ping_ip(ip, text_widget):
+def ping_ip(ip, label, rt_label, root):
     try:
-        # Run the ping command
-        result = subprocess.run(['ping', '-n', '1', ip], capture_output=True, text=True, timeout=5)
-        match = re.search(r"time=(\d+)ms", result.stdout)
-        if match:
-            round_trip_time_str = match.group(0)  
-        else:
-            round_trip_time_str = 'Round-trip time not found in the output.'
-        # Extract time information
-        if result.returncode == 0:
-            response_data = f"IP: {ip}\n{round_trip_time_str}\n"
-            response_status = 'Status: Online\n'
-            text_widget.tag_config('status_tag', foreground='green')
-        else:
-            response_data = f"IP: {ip}\n{result.stderr}\n"
-            response_status = 'Status: Offline\n'
-            text_widget.tag_config('status_tag', foreground='red')
+        while True:
+            # Run the ping command
+            result = subprocess.run(['ping', '-n', '1', ip], capture_output=True, text=True, timeout=5)
+            match = re.search(r"time=(\d+)ms", result.stdout)
+            if match:
+                round_trip_time = int(match.group(1))  # Extract round-trip time as an integer
+                round_trip_time_str = f"{round_trip_time}ms"
+                if round_trip_time > 100:
+                    rt_label.config(fg='yellow')  # Set font color to yellow if round-trip time exceeds 100 milliseconds
+                else:
+                    rt_label.config(fg='white')   # Set font color to white if round-trip time is below or equal to 100 milliseconds
+            else:
+                round_trip_time_str = 'Round-trip time not found in the output.'
+                rt_label.config(fg='white')   # Set font color to white if round-trip time is not found
+            # Extract time information
+            if result.returncode == 0:
+                label.config(bg='#008000')  # Set label background to dark green for online
+            else:
+                label.config(bg='#800000')    # Set label background to dark red for offline
+
+            # Update round-trip time label
+            rt_label.config(text=f"Time: {round_trip_time_str}")
+
+            # Sleep for 1 second before next ping
+            threading.Event().wait(1)
 
     except subprocess.TimeoutExpired:
-        response_data = f"IP: {ip}\nStatus: Timeout\n"
-
-    # Update the text widget with the formatted data
-    text_widget.delete('1.0', tk.END)
-    text_widget.insert(tk.END, response_data)
-    text_widget.insert(tk.END, response_status, 'status_tag')
-    text_widget.yview(tk.END)  # Auto-scroll to the end
-
-def ping_ips():
-    for ip, text_widget in zip(data, text_widgets):
-        threading.Thread(target=ping_ip, args=(ip, text_widget)).start()
-    root.after(1000, ping_ips)  # Repeat every 1000 milliseconds (1 seconds)
+        round_trip_time_str = 'Timeout'
+        label.config(bg='#808000')     # Set label background to dark yellow for timeout
+        rt_label.config(fg='white')   # Set font color to white for timeout
+        rt_label.config(text=f"Time: {round_trip_time_str}")
 
 # Create the main window
 root = tk.Tk()
-root.title("Server Status Report - Powered by Smile :)")
+root.title("Server Status Report - Powered by TechClone")
+root.configure(bg='#303030')  # Set background color to dark gray
 
-# Create a list to store text widgets
-text_widgets = []
+# Create a list to store labels and round-trip time labels
+labels = []
 
-# Create a text widget for each IP and arrange them into rows of three
-for i, ip in enumerate(data, start=1):
-    ip_text = scrolledtext.ScrolledText(root, width=50, height=6)
-    ip_text.grid(row=(i-1)//2, column=(i-1)%2, padx=5, pady=5)  # Grid layout
-    text_widgets.append(ip_text)
-
-# Start pinging IPs automatically
-ping_ips()
+# Create a label for each IP and arrange them into rows
+for i, entry in enumerate(data, start=1):
+    hostname = entry['hostname']
+    ip = entry['ip']
+    label = Label(root, text=f"{hostname} ({ip})", width=25, height=3, bg='#808080', fg='white')  # Set label background to dark gray
+    label.grid(row=i, column=0, padx=5, pady=5)  # Grid layout
+    rt_label = Label(root, text="Time: ", width=40, height=3, bg='#303030', fg='white')  # Set label background to dark gray
+    rt_label.grid(row=i, column=1, padx=5, pady=5)  # Grid layout
+    labels.append(label)
+    threading.Thread(target=ping_ip, args=(ip, label, rt_label, root)).start()
+    tracert_button = Button(root, text="Tracert", bg='#606060', fg='white', command=lambda ip=ip: tracert_ip(ip))  # Set button background to gray
+    tracert_button.grid(row=i, column=2, padx=5, pady=5)  # Grid layout
 
 # Run the Tkinter event loop
 root.mainloop()
